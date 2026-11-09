@@ -27,8 +27,6 @@ export class LinkedinPageProvider
   override refreshWait = true;
   override maxConcurrentJob = 2; // LinkedIn Page has professional posting limits
   override scopes = [
-    'openid',
-    'profile',
     'w_member_social',
     'r_basicprofile',
     'rw_organization_admin',
@@ -60,25 +58,9 @@ export class LinkedinPageProvider
       })
     ).json();
 
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
-
-    const {
-      name,
-      sub: id,
-      picture,
-    } = await (
-      await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    const { id, name, picture, vanityName } = await this.fetchProfile(
+      accessToken
+    );
 
     return {
       id,
@@ -88,6 +70,34 @@ export class LinkedinPageProvider
       name,
       picture,
       username: vanityName,
+    };
+  }
+
+  private async fetchProfile(accessToken: string) {
+    const {
+      id,
+      localizedFirstName,
+      localizedLastName,
+      vanityName,
+      profilePicture,
+    } = await (
+      await fetch(
+        'https://api.linkedin.com/v2/me?projection=(id,localizedFirstName,localizedLastName,vanityName,profilePicture(displayImage~:playableStreams))',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      )
+    ).json();
+
+    return {
+      id,
+      name: [localizedFirstName, localizedLastName].filter(Boolean).join(' '),
+      picture:
+        profilePicture?.['displayImage~']?.elements?.slice(-1)?.[0]
+          ?.identifiers?.[0]?.identifier || '',
+      vanityName,
     };
   }
 
@@ -124,7 +134,7 @@ export class LinkedinPageProvider
   override async generateAuthUrl() {
     const state = makeSecureId(6);
     const codeVerifier = makeSecureId(30);
-    const url = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&prompt=none&client_id=${
+    const url = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${
       process.env.LINKEDIN_CLIENT_ID
     }&redirect_uri=${encodeURIComponent(
       `${process.env.FRONTEND_URL}/integrations/social/linkedin-page`
@@ -241,25 +251,9 @@ export class LinkedinPageProvider
 
     this.checkScopes(this.scopes, scope);
 
-    const {
-      name,
-      sub: id,
-      picture,
-    } = await (
-      await fetch('https://api.linkedin.com/v2/userinfo', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
-
-    const { vanityName } = await (
-      await fetch('https://api.linkedin.com/v2/me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-    ).json();
+    const { id, name, picture, vanityName } = await this.fetchProfile(
+      accessToken
+    );
 
     return {
       // namespaced placeholder so the in-between row never collides with the
